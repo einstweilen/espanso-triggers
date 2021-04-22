@@ -1,0 +1,51 @@
+#!/bin/bash
+
+if [ ! -z "$1" ]; then
+    case "$1" in
+        'Restart Espanso' )
+            /usr/local/bin/espanso restart
+            ;;
+        'Pause Espanso' )
+            /usr/local/bin/espanso stop
+            ;;
+        'Edit triggers…' )
+            open -a "Visual Studio Code" -e $HOME/Library/Preferences/espanso/default.yml
+            ;;
+        *)
+        trigger=$(grep -o "[^# ]*" <<<$1)
+        osascript <<-EndOfScript
+            tell application "System Events" to keystroke "$trigger"
+EndOfScript
+            ;;
+    esac
+fi
+
+# Espanso start/stop
+    if grep -q not <<< "$(/usr/local/bin/espanso status)"; then
+        echo "Restart Espanso"
+    else
+        echo "Pause Espanso"
+    fi
+
+echo "Edit triggers…"
+echo "----"
+
+# default user triggers 
+grep -o ' trigger.*' $HOME/Library/Preferences/espanso/*.yml |
+sort | sed 's/trigger:[^\"]*\(.*\)/\1/g' | tr -d '\"'
+
+# list installed packages
+cd "$(/usr/local/bin/espanso path | grep -F Packages | cut -f 2- -d' ')"
+
+if [ $(find . -type d | wc -l) -ne 0 ]; then
+    echo "----"
+    find . -name '*.yml' | sort |
+    while read line; do
+        trig_cnt=$(grep -c -F ' trigger' "$line")
+        trig_menu=$(sed 's:./\([^//]*\).*:\1:' <<<$line)
+        echo "DISABLED|MENUITEMICON|AppIcon.icns|$trig_menu"
+        echo "SUBMENU|$trig_cnt triggers in $trig_menu|$(grep -o ' trigger.*' "$line" |
+            sort | sed 's/trigger:[^\"]*\(.*\)/\1/g' |
+            tr -d '\"' | tr '\n' '|')"
+    done
+fi
