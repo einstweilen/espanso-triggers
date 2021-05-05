@@ -1,6 +1,9 @@
 #!/bin/bash
 
-if [ ! -z "$1" ]; then
+# https://github.com/einstweilen/espanso-triggers
+# 2021-05-05
+
+if [ -n "$1" ]; then
     case "$1" in
         'Restart Espanso' )
             /usr/local/bin/espanso restart
@@ -9,10 +12,10 @@ if [ ! -z "$1" ]; then
             /usr/local/bin/espanso stop
             ;;
         'Edit triggers…' )
-            open -a "Visual Studio Code" -e $HOME/Library/Preferences/espanso/default.yml
+            open -e "$HOME/Library/Preferences/espanso/default.yml"
             ;;
         *)
-        trigger=$(grep -o "[^# ]*" <<<$1)
+        trigger=$(grep -o "[^# ]*" <<<"$1")
         osascript <<-EndOfScript
             tell application "System Events" to keystroke "$trigger"
 EndOfScript
@@ -30,22 +33,31 @@ fi
 echo "Edit triggers…"
 echo "----"
 
-# default user triggers 
-grep -o ' trigger.*' $HOME/Library/Preferences/espanso/*.yml |
-sort | sed 's/trigger:[^\"]*\(.*\)/\1/g' | tr -d '\"'
+# list user triggers
+if [[ $(ls 2>/dev/null -U $HOME/Library/Preferences/espanso/*.yml | wc -l ) -gt 1 ]]; then 
+    for yfile in $HOME/Library/Preferences/espanso/*.yml; do
+        echo "DISABLED|MENUITEMICON|AppIcon.icns|$(basename "$yfile" .yml)"
+        grep -oh ' trigger.*' "$yfile" | sort |
+        sed 's/trigger:[^\"]*\(.*\)/\1/g' | tr -d '\"'
+    done
+else
+    grep -oh ' trigger.*' $HOME/Library/Preferences/espanso/*.yml | sort |
+    sed 's/trigger:[^\"]*\(.*\)/\1/g' | tr -d '\"'
+fi
 
 # list installed packages
-cd "$(/usr/local/bin/espanso path | grep -F Packages | cut -f 2- -d' ')"
+cd "$(/usr/local/bin/espanso path | grep -F Packages | cut -f 2- -d' ')" || exit
 
 if [ $(find . -type d | wc -l) -ne 0 ]; then
     echo "----"
     find . -name '*.yml' | sort |
     while read line; do
         trig_cnt=$(grep -c -F ' trigger' "$line")
-        trig_menu=$(sed 's:./\([^//]*\).*:\1:' <<<$line)
+        trig_menu=$(sed 's:./\([^//]*\).*:\1:' <<<"$line")
+        trig_list="$(grep -o ' trigger.*' "$line" |
+                    sort | sed 's/trigger:[^\"]*\(.*\)/\1/g' |
+                    tr -d '\"' | tr '\n' '|')"
         echo "DISABLED|MENUITEMICON|AppIcon.icns|$trig_menu"
-        echo "SUBMENU|$trig_cnt triggers in $trig_menu|$(grep -o ' trigger.*' "$line" |
-            sort | sed 's/trigger:[^\"]*\(.*\)/\1/g' |
-            tr -d '\"' | tr '\n' '|')"
+        echo "SUBMENU|$trig_cnt triggers in $trig_menu|${trig_list%?}"
     done
 fi
